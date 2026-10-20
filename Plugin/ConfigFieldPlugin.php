@@ -6,9 +6,11 @@ namespace AvS\ScopeHint\Plugin;
 
 use Magento\Config\Model\Config\Backend\Encrypted;
 use Magento\Config\Model\Config\Structure\Element\Field as Subject;
+use Magento\Config\Model\Config\TypePool;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\App\RequestInterface;
 use Magento\Framework\Escaper;
+use Magento\Framework\ObjectManager\ConfigInterface as DiConfig;
 use Magento\Framework\Phrase;
 use Magento\Store\Api\WebsiteRepositoryInterface;
 use Magento\Store\Api\StoreRepositoryInterface;
@@ -42,6 +44,14 @@ class ConfigFieldPlugin
      * @var RequestInterface
      */
     private RequestInterface $request;
+    /**
+     * @var TypePool
+     */
+    private TypePool $typePool;
+    /**
+     * @var DiConfig
+     */
+    private DiConfig $diConfig;
 
      /**
      * @var bool
@@ -53,13 +63,17 @@ class ConfigFieldPlugin
         ScopeConfigInterface $scopeConfig,
         WebsiteRepositoryInterface $websiteRepository,
         StoreRepositoryInterface $storeRepository,
-        RequestInterface $request
+        RequestInterface $request,
+        TypePool $typePool,
+        DiConfig $diConfig
     ) {
         $this->escaper = $escaper;
         $this->scopeConfig = $scopeConfig;
         $this->websiteRepository = $websiteRepository;
         $this->storeRepository = $storeRepository;
         $this->request = $request;
+        $this->typePool = $typePool;
+        $this->diConfig = $diConfig;
     }
 
     /**
@@ -70,12 +84,13 @@ class ConfigFieldPlugin
     public function afterGetTooltip(Subject $subject, $result)
     {
         $lines = [$result];
+        $isSensitive = $this->isSensitiveField($subject);
         foreach($this->websiteRepository->getList() as $website) {
             if ($this->getWebsiteParam() || $this->getStoreParam()) {
                 continue;
             }
             // Only show website specific values in default scope
-            if ($scopeLine = $this->getScopeHint($subject, self::SCOPE_TYPE_WEBSITES, $website)) {
+            if ($scopeLine = $this->getScopeHint($subject, self::SCOPE_TYPE_WEBSITES, $website, $isSensitive)) {
                 $lines[] = $scopeLine;
             }
         }
@@ -87,7 +102,7 @@ class ConfigFieldPlugin
                 continue;
             }
             // Only show store specific values in default scope and in parent website scope
-            if ($scopeLine = $this->getScopeHint($subject, self::SCOPE_TYPE_STORES, $store)) {
+            if ($scopeLine = $this->getScopeHint($subject, self::SCOPE_TYPE_STORES, $store, $isSensitive)) {
                 $lines[] = $scopeLine;
             }
         }
@@ -136,20 +151,28 @@ class ConfigFieldPlugin
      */
     private function isSensitiveField(Subject $field): bool
     {
-        if (in_array($field->getType(), ['obscure', 'password'], true)) {
+        if (in_array($field->getType(), ['obscure', 'password'], true)
+            || $this->typePool->isPresent($this->getPath($field), TypePool::TYPE_SENSITIVE)
+        ) {
             return true;
         }
         $backendModel = $field->getAttribute('backend_model');
-        return is_string($backendModel) && is_a(ltrim($backendModel, '\\'), Encrypted::class, true);
+        if (!is_string($backendModel) || $backendModel === '') {
+            return false;
+        }
+        // Resolve virtual types to their real class before checking
+        $backendClass = $this->diConfig->getInstanceType(ltrim($backendModel, '\\'));
+        return is_a($backendClass, Encrypted::class, true);
     }
 
     /**
      * @param Subject $field
      * @param string $scopeType
      * @param WebsiteInterface|StoreInterface $scope
+     * @param bool $isSensitive
      * @return string
      */
-    private function getScopeHint(Subject $field, $scopeType, $scope)
+    private function getScopeHint(Subject $field, $scopeType, $scope, bool $isSensitive)
     {
         $path = $this->getPath($field);
         $scopeLine = '';
@@ -174,10 +197,15 @@ class ConfigFieldPlugin
         if ($scopeValue != $currentValue) {
             // Match options on the raw value, escape only once for output
             $scopeCode = $this->escaper->escapeHtml((string) $scope->getCode());
+
             // Never reveal values of secret fields (passwords, API keys etc.), only that they differ
-            $valueLabel = $this->isSensitiveField($field)
-                ? (string) __('(different value)')
-                : $this->escaper->escapeHtml((string) $this->getValueLabel($field, $scopeValue));
+            if ($isSensitive) {
+                return $scopeType === self::SCOPE_TYPE_STORES
+                    ? __('Store <code>%1</code>: value differs', $scopeCode)
+                    : __('Website <code>%1</code>: value differs', $scopeCode);
+            }
+
+            $valueLabel = $this->escaper->escapeHtml((string) $this->getValueLabel($field, $scopeValue));
 
             switch($scopeType) {
                 case self::SCOPE_TYPE_STORES:

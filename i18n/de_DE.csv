@@ -1,1 +1,5 @@
 "Path: <code>%1</code>","Pfad: <code>%1</code>"
+"Store <code>%1</code>: ""%2""","Store-View <code>%1</code>: ""%2"""
+"Website <code>%1</code>: ""%2""","Website <code>%1</code>: ""%2"""
+"Store <code>%1</code>: value differs","Store-View <code>%1</code>: abweichender Wert"
+"Website <code>%1</code>: value differs","Website <code>%1</code>: abweichender Wert"
