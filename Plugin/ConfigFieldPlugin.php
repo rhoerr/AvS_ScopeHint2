@@ -69,11 +69,6 @@ class ConfigFieldPlugin
      */
     public function afterGetTooltip(Subject $subject, $result)
     {
-        // Never reveal values of secret fields (passwords, API keys etc.)
-        if ($this->isSensitiveField($subject)) {
-            return $result;
-        }
-
         $lines = [$result];
         foreach($this->websiteRepository->getList() as $website) {
             if ($this->getWebsiteParam() || $this->getStoreParam()) {
@@ -179,7 +174,10 @@ class ConfigFieldPlugin
         if ($scopeValue != $currentValue) {
             // Match options on the raw value, escape only once for output
             $scopeCode = $this->escaper->escapeHtml((string) $scope->getCode());
-            $valueLabel = $this->escaper->escapeHtml((string) $this->getValueLabel($field, $scopeValue));
+            // Never reveal values of secret fields (passwords, API keys etc.), only that they differ
+            $valueLabel = $this->isSensitiveField($field)
+                ? (string) __('(different value)')
+                : $this->escaper->escapeHtml((string) $this->getValueLabel($field, $scopeValue));
 
             switch($scopeType) {
                 case self::SCOPE_TYPE_STORES:
