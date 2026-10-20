@@ -6,6 +6,7 @@ namespace AvS\ScopeHint\Plugin;
 
 use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\Eav;
+use Magento\Framework\Escaper;
 use Magento\Framework\Registry;
 use Magento\Store\Model\StoreManagerInterface;
 use Magento\Catalog\Model\Attribute\ScopeOverriddenValue;
@@ -21,6 +22,9 @@ class ProductEavDataProviderPlugin
     /** @var ProductRepositoryInterface */
     private ProductRepositoryInterface $productRepository;
 
+    /** @var Escaper */
+    private Escaper $escaper;
+
     /** @var array */
     private ?array $stores = null;
 
@@ -30,15 +34,18 @@ class ProductEavDataProviderPlugin
      * @param StoreManagerInterface $storeManager
      * @param Registry $registry
      * @param ProductRepositoryInterface $productRepository
+     * @param Escaper $escaper
      */
     public function __construct(
         StoreManagerInterface $storeManager,
         Registry $registry,
-        ProductRepositoryInterface $productRepository
+        ProductRepositoryInterface $productRepository,
+        Escaper $escaper
     ) {
         $this->storeManager = $storeManager;
         $this->registry = $registry;
         $this->productRepository = $productRepository;
+        $this->escaper = $escaper;
     }
 
     /**
@@ -95,7 +102,9 @@ class ProductEavDataProviderPlugin
             }
 
             if ($valueAsString !== null && $product->getData($attributeCode) !== $currentScopeValueForCode) {
-                $scopeHints[] = $storeView->getName() . ': ' . $valueAsString;
+                // The tooltip description is rendered as HTML, so escape store names and values
+                $scopeHints[] = $this->escaper->escapeHtml($storeView->getName()) . ': '
+                    . $this->escaper->escapeHtml($valueAsString);
             }
 
             if (!empty($scopeHints)) {

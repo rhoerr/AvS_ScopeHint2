@@ -8,6 +8,7 @@ class ConfigFieldPluginTest extends \Magento\TestFramework\TestCase\AbstractBack
     /**
      * @magentoDbIsolation enabled
      * @magentoAppIsolation enabled
+     * @magentoConfigFixture default/dev/debug/show_path_in_adminhtml 1
      */
     public function testPathComment()
     {
