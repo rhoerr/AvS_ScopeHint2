@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AvS\ScopeHint\Plugin;
 
 use Magento\Catalog\Api\Data\ProductAttributeInterface;
-use Magento\Eav\Api\Data\AttributeInterface;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\Stdlib\ArrayManager;
 use Magento\Catalog\Ui\DataProvider\Product\Form\Modifier\Eav as EavModifier;
@@ -41,10 +40,6 @@ class UIScopeLabel
     public function afterSetupAttributeMeta(EavModifier $subject, $result, ProductAttributeInterface $attribute)
     {
         if (!$this->scopeConfig->isSetFlag(self::CONFIG_SHOW_ATTRIBUTE_CODE)) {
-            return $result;
-        }
-
-        if ($attribute->getFrontendInput() === AttributeInterface::FRONTEND_INPUT) {
             return $result;
         }
 

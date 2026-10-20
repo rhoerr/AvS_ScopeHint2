@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AvS\ScopeHint\Plugin;
 
+use Magento\Config\Model\Config\Backend\Encrypted;
 use Magento\Config\Model\Config\Structure\Element\Field as Subject;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\App\RequestInterface;
@@ -68,6 +69,11 @@ class ConfigFieldPlugin
      */
     public function afterGetTooltip(Subject $subject, $result)
     {
+        // Never reveal values of secret fields (passwords, API keys etc.)
+        if ($this->isSensitiveField($subject)) {
+            return $result;
+        }
+
         $lines = [$result];
         foreach($this->websiteRepository->getList() as $website) {
             if ($this->getWebsiteParam() || $this->getStoreParam()) {
@@ -110,7 +116,9 @@ class ConfigFieldPlugin
         if (!$this->isProcessing) {
             $this->isProcessing = true;
 
-             $result['path_hint'] = '<small>' . __('Path: <code>%1</code>', $this->getPath($subject) . '</small>');
+             $result['path_hint'] = '<small>'
+                 . __('Path: <code>%1</code>', $this->escaper->escapeHtml($this->getPath($subject)))
+                 . '</small>';
 
             $this->isProcessing = false;
          }
@@ -125,6 +133,19 @@ class ConfigFieldPlugin
     private function getPath(Subject $subject)
     {
         return $path = $subject->getConfigPath() ?: $subject->getPath();
+    }
+
+    /**
+     * @param Subject $field
+     * @return bool
+     */
+    private function isSensitiveField(Subject $field): bool
+    {
+        if (in_array($field->getType(), ['obscure', 'password'], true)) {
+            return true;
+        }
+        $backendModel = $field->getAttribute('backend_model');
+        return is_string($backendModel) && is_a(ltrim($backendModel, '\\'), Encrypted::class, true);
     }
 
     /**
@@ -156,20 +177,22 @@ class ConfigFieldPlugin
         $scopeValue = (string) $scopeValue;
 
         if ($scopeValue != $currentValue) {
-            $scopeValue = $this->escaper->escapeHtml($scopeValue);
+            // Match options on the raw value, escape only once for output
+            $scopeCode = $this->escaper->escapeHtml((string) $scope->getCode());
+            $valueLabel = $this->escaper->escapeHtml((string) $this->getValueLabel($field, $scopeValue));
 
             switch($scopeType) {
                 case self::SCOPE_TYPE_STORES:
                     return __(
                         'Store <code>%1</code>: "%2"',
-                        $scope->getCode(),
-                        $this->getValueLabel($field, $scopeValue)
+                        $scopeCode,
+                        $valueLabel
                     );
                 case self::SCOPE_TYPE_WEBSITES:
                     return __(
                         'Website <code>%1</code>: "%2"',
-                        $scope->getCode(),
-                        $this->getValueLabel($field, $scopeValue)
+                        $scopeCode,
+                        $valueLabel
                     );
             }
         }
